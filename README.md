@@ -103,6 +103,10 @@ static int LSTMSize        = 512;
 // smoothing of delta
 const float alpha = 0.05;	// 5% current dist, 95% historical average
 
+actionJointDelta = 0.1f;
+actionVelDelta   = 0.05f;	// TUNE was 0.1
+maxEpisodeLength = 200;		// TUNE was 100
+
 ```
 
 In order to improve these results, I added a loop changing both learning rate from 0.05 to 0.45, and changing the LSTM size from 64, 128, 256, to 512. This plot shows the results:
