@@ -83,6 +83,10 @@ So, what can we see from these graphs? Well:
 1. LSTM size of 64 does not work.
 2. LSTM size of 512 does not work
 3. LSTM size of 128 or 256 give similar results:
-* The best learning rate in both cases is 0.1, with a rate of 0.54 for LSTM-128 and 0.45 for LSTM-256.
+
+The best learning rate in both cases is 0.1, with a rate of 0.54 for LSTM-128 and 0.45 for LSTM-256. 
+
+Having the cylinder move from run to run causes issues for the learning accuracy since the robot tends to return to where it found the cylinder before. Instinctively, in order to learn in this new circumstance, the LSTM size should increase to acomodate the more complex task. So the next step is to set the learning rate to 0.1, the LSTM size to 512 and let the maximum number of episodes in a run extend into the thousands.
+
 
 
