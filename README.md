@@ -38,8 +38,9 @@ In PropPlugin.cpp, redefine the prop poses in PropPlugin::Randomize() to the fol
 pose.pos.x = randf(0.02f, 0.30f);
 pose.pos.y = 0.0f;
 pose.pos.z = 0.0f;
-In ArmPlugin.cpp, replace ResetPropDynamics(); set in the method ArmPlugin::updateJoints() with RandomizeProps();
 ```
+
+In ArmPlugin.cpp, replace ResetPropDynamics(); set in the method ArmPlugin::updateJoints() with RandomizeProps();
 
 ### 2. Increasing the Arm’s Reach
 As you might have noticed in the gazebo-arm.world file, the arm’s base has a revolute joint. However, in the project, that was disabled to restrict the arm’s reach to a specific axis. In this challenge, the object’s starting location will be changed, and the arm will be allowed to rotate about its base. Follow these steps to try this challenge:
