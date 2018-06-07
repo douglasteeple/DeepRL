@@ -78,11 +78,11 @@ In order to improve these results, I added a loop changing both learning rate fr
 
 ![alt text](images/tuning.png "Challenge part 3 tuning")
 
-So, what can we see from these graphs. Well:
+So, what can we see from these graphs? Well:
 
 1. LSTM size of 64 does not work.
 2. LSTM size of 512 does not work
 3. LSTM size of 128 or 256 give similar results:
-* The best learning rate in both cases is 0.1, with a rate of 0.54 for LSTM 128 and 0.45 for LSTM-256.
+* The best learning rate in both cases is 0.1, with a rate of 0.54 for LSTM-128 and 0.45 for LSTM-256.
 
 
