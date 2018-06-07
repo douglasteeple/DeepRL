@@ -73,6 +73,37 @@ After making all these changes (I skipped directly to part 3) the best results I
 
 ![alt text](images/Challenge3-47.png "Challenge part 3 47% Accuracy")
 
+For this challenge the paramters are:
+
+``` c++
+// Turn on velocity based control
+static bool VELOCITY_CONTROL = true;
+static float VELOCITY_MIN = -0.2f;
+static float VELOCITY_MAX  = 0.2f;
+
+// Define DQN API Settings
+
+static bool ALLOW_RANDOM = true;
+static bool DEBUG_DQN = false;
+static float GAMMA = 0.9f;
+static float EPS_START = 0.9f;
+static float EPS_END = 0.05f;
+static int EPS_DECAY = 200;
+
+static int INPUT_WIDTH     = 64;
+static int INPUT_HEIGHT    = 64;
+static int INPUT_CHANNELS  = 3;
+static const char *OPTIMIZER = "RMSprop";
+static float LearningRate  = 0.1f;
+static int REPLAY_MEMORY   = 10000;
+static int BATCH_SIZE      = 64;
+static bool USE_LSTM       = true;
+static int LSTMSize        = 512;
+
+// smoothing of delta
+const float alpha = 0.05;	// 5% current dist, 95% historical average
+
+```
 
 In order to improve these results, I added a loop changing both learning rate from 0.05 to 0.45, and changing the LSTM size from 64, 128, 256, to 512. This plot shows the results:
 
