@@ -69,4 +69,10 @@ In PropPlugin.cpp in the onUpdate() function, add a small velocity so the cylind
 	this->model->SetLinearVel(math::Vector3(.03, 0, 0));
 ```
 
+After making all these changes (I skipped directly to part 3) the best results I could get was an accuracy of 0.47:
+
+![alt text](images/Challenge3-47.png "Challenge part 3 47% Accuracy")
+
+In order to improve these results, I added a loop changing both learning rate from 0.05 to 0.45, and changing the LSTM size from 64, 128, 256, to 512. This plot shows the results:
+
 ![alt text](images/tuning.png "Challenge part 3 tuning")
