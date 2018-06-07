@@ -73,6 +73,16 @@ After making all these changes (I skipped directly to part 3) the best results I
 
 ![alt text](images/Challenge3-47.png "Challenge part 3 47% Accuracy")
 
+
 In order to improve these results, I added a loop changing both learning rate from 0.05 to 0.45, and changing the LSTM size from 64, 128, 256, to 512. This plot shows the results:
 
 ![alt text](images/tuning.png "Challenge part 3 tuning")
+
+So, what can we see from these graphs. Well:
+
+1. LSTM size of 64 does not work.
+2. LSTM size of 512 does not work
+3. LSTM size of 128 or 256 give similar results:
+* The best learning rate in both cases is 0.1, with a rate of 0.54 for LSTM 128 and 0.45 for LSTM-256.
+
+
