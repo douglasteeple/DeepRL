@@ -37,26 +37,26 @@ The DQN agent is a C++ wrapper for a Python pyTorch implementation of DQN descri
 
 Our environment is deterministic, so all equations presented here are also formulated deterministically for the sake of simplicity. In the reinforcement learning literature, they would also contain expectations over stochastic transitions in the environment.
 
-Our aim will be to train a policy that tries to maximize the discounted, cumulative reward <img height=20px src="images/eq1.png"/>, where Rt0 is also known as the return. The discount, γ, should be a constant between 0 and 1 that ensures the sum converges. It makes rewards from the uncertain far future less important for our agent than the ones in the near future that it can be fairly confident about.
+Our aim will be to train a policy that tries to maximize the discounted, cumulative reward <img height=20px src="images/eq1.png"/>, where <img height=20px src="images/eq2.png"/> is also known as the return. The discount, γ, should be a constant between 0 and 1 that ensures the sum converges. It makes rewards from the uncertain far future less important for our agent than the ones in the near future that it can be fairly confident about.
 
-The main idea behind Q-learning is that if we had a function ![alt text](images/eq3.png "Equation 3"), that could tell us what our return would be, if we were to take an action in a given state, then we could easily construct a policy that maximizes our rewards:
+The main idea behind Q-learning is that if we had a function <img height=20px src="images/eq3.png"/>, that could tell us what our return would be, if we were to take an action in a given state, then we could easily construct a policy that maximizes our rewards:
 
-![alt text](images/eq4.png "Equation 4")
+<img height=40px src="images/eq4.png"/>
 
 However, we don’t know everything about the world, so we don’t have access to Q∗. But, since neural networks are universal function approximators, we can simply create one and train it to resemble Q∗.
 
 For our training update rule, we’ll use a fact that every Q
  function for some policy obeys the Bellman equation:
 
-![alt text](images/eq5.png "Equation 5")
+<img height=40px src="images/eq5.png"/>
 
 The difference between the two sides of the equality is known as the temporal difference error, δ:
 
-![alt text](images/eq6.png "Equation 6")
+<img height=40px src="images/eq6.png"/>
 
 To minimise this error, we will use the Huber loss. The Huber loss acts like the mean squared error when the error is small, but like the mean absolute error when the error is large - this makes it more robust to outliers when the estimates of Q are very noisy. We calculate this over a batch of transitions, B, sampled from the replay memory:
 
-![alt text](images/eq7.png "Equation 7") 
+<img height=60px src="images/eq7.png"/>
  
 Q-network
 
