@@ -69,7 +69,7 @@ In PropPlugin.cpp in the onUpdate() function, add a small velocity so the cylind
 	this->model->SetLinearVel(math::Vector3(.03, 0, 0));
 ```
 
-After making all these changes (I skipped directly to part 3) the best results I could get was an accuracy of 0.47. Note that the notion of a success was relaxed a bit to mean *any part of the arm or gripper contactng the cylinder*.
+After making all these changes (I skipped directly to part 3) the best results I could get was an accuracy of 0.47. Note that the notion of a success was relaxed a bit to mean *any part of the arm or gripper contacting the cylinder*.
 
 ![alt text](images/Challenge3-47.png "Challenge part 3 47% Accuracy")
 
