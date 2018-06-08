@@ -56,7 +56,7 @@ The difference between the two sides of the equality is known as the temporal di
 
 To minimise this error, we will use the Huber loss. The Huber loss acts like the mean squared error when the error is small, but like the mean absolute error when the error is large - this makes it more robust to outliers when the estimates of Q are very noisy. We calculate this over a batch of transitions, B, sampled from the replay memory:
 
-<img height=200px src="images/eq7.png"/>
+<img height=150px src="images/eq7.png"/>
  
 Q-network
 
