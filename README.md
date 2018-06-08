@@ -41,22 +41,22 @@ Our aim will be to train a policy that tries to maximize the discounted, cumulat
 
 The main idea behind Q-learning is that if we had a function <img height=20px src="images/eq3.png"/>, that could tell us what our return would be, if we were to take an action in a given state, then we could easily construct a policy that maximizes our rewards:
 
-<img height=40px src="images/eq4.png"/>
+<img height=30px src="images/eq4.png"/>
 
 However, we don’t know everything about the world, so we don’t have access to Q∗. But, since neural networks are universal function approximators, we can simply create one and train it to resemble Q∗.
 
 For our training update rule, we’ll use a fact that every Q
  function for some policy obeys the Bellman equation:
 
-<img height=40px src="images/eq5.png"/>
+<img height=30px src="images/eq5.png"/>
 
 The difference between the two sides of the equality is known as the temporal difference error, δ:
 
-<img height=40px src="images/eq6.png"/>
+<img height=45px src="images/eq6.png"/>
 
 To minimise this error, we will use the Huber loss. The Huber loss acts like the mean squared error when the error is small, but like the mean absolute error when the error is large - this makes it more robust to outliers when the estimates of Q are very noisy. We calculate this over a batch of transitions, B, sampled from the replay memory:
 
-<img height=60px src="images/eq7.png"/>
+<img height=2000px src="images/eq7.png"/>
  
 Q-network
 
