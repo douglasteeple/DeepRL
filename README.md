@@ -48,25 +48,21 @@ However, we don’t know everything about the world, so we don’t have access t
 For our training update rule, we’ll use a fact that every Q
  function for some policy obeys the Bellman equation:
 
-![alt text](images/eq4.png "Equation 4")
+![alt text](images/eq5.png "Equation 5")
 
 The difference between the two sides of the equality is known as the temporal difference error, δ:
 
-![alt text](images/eq5.png "Equation 5")
+![alt text](images/eq6.png "Equation 6")
 
 To minimise this error, we will use the Huber loss. The Huber loss acts like the mean squared error when the error is small, but like the mean absolute error when the error is large - this makes it more robust to outliers when the estimates of Q
  are very noisy. We calculate this over a batch of transitions, B, sampled from the replay memory:
 
-![alt text](images/eq6.png "Equation 6")
+![alt text](images/eq7.png "Equation 7")
 otherwise. 
  
 Q-network
 
-Our model will be a convolutional neural network that takes in the difference between the current and previous screen patches. It has two outputs, representing
-
-![alt text](images/eq7.png "Equation 7")
-
- (where ss is the input to the network). In effect, the network is trying to predict the quality of taking each action given the current input.
+Our model will be a convolutional neural network that takes in the difference between the current and previous screen patches. It has two outputs, representing Q(s,left) and Q(s,right) (where s is the input to the network). In effect, the network is trying to predict the quality of taking each action given the current input.
 
 The probability of choosing a random action will start at EPS_START and will decay exponentially towards EPS_END. EPS_DECAY controls the rate of the decay.
 
