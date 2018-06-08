@@ -33,7 +33,7 @@ The script `gazebo-arm.sh` in the root directory launches gazebo with the ArmPlu
 
 ## The DQN Implementation
 
-The DQN agent is a C++ wrapper for a Python pyTorch implementation of DQN described [here](https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html):
+The DQN agent is a C++ wrapper for a Python pyTorch implementation of DQN described [here](https://pytorch.org/tutorials/intermediate/reinforcement_q_learning.html). I am quoting directly from the pytorch tutorial to gain a better understanding of how to approach Challenge 3.
 
 Our environment is deterministic, so all equations presented here are also formulated deterministically for the sake of simplicity. In the reinforcement learning literature, they would also contain expectations over stochastic transitions in the environment.
 
@@ -88,7 +88,7 @@ class DQN(nn.Module):
 
 This cell instantiates our model and its optimizer, and defines some utilities:
 
-select_action - will select an action accordingly to an epsilon greedy policy. Simply put, we’ll sometimes use our model for choosing the action, and sometimes we’ll just sample one uniformly. The probability of choosing a random action will start at EPS_START and will decay exponentially towards EPS_END. EPS_DECAY controls the rate of the decay.
+select_action - will select an action accordingly to an epsilon greedy policy. Simply put, we’ll sometimes use our model for choosing the action, and sometimes we’ll just sample one uniformly. *The probability of choosing a random action will start at EPS_START and will decay exponentially towards EPS_END. EPS_DECAY controls the rate of the decay.*
 
 ```Python
 BATCH_SIZE = 128
@@ -211,7 +211,9 @@ for i_episode in range(num_episodes):
     if i_episode % TARGET_UPDATE == 0:
         target_net.load_state_dict(policy_net.state_dict())
 ```
+... end of pyTorch tutorial.
 
+So, what can we draw from this information? Well, the replay memory has a long memory, so if we switch tasks from the base project to Challenge 3, the replay will do what it did from the base project, which is to return to the last location of the cylinder. That is what we don't want.
 
 ## Challenge Part 3
 
