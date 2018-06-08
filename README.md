@@ -37,7 +37,7 @@ The DQN agent is a C++ wrapper for a Python pyTorch implementation of DQN descri
 
 Our environment is deterministic, so all equations presented here are also formulated deterministically for the sake of simplicity. In the reinforcement learning literature, they would also contain expectations over stochastic transitions in the environment.
 
-Our aim will be to train a policy that tries to maximize the discounted, cumulative reward ![alt text](images/eq1.png "Equation 1"), where Rt0 is also known as the return. The discount, γ, should be a constant between 0 and 1 that ensures the sum converges. It makes rewards from the uncertain far future less important for our agent than the ones in the near future that it can be fairly confident about.
+Our aim will be to train a policy that tries to maximize the discounted, cumulative reward <img height=12px src="images/eq1.png"/>, where Rt0 is also known as the return. The discount, γ, should be a constant between 0 and 1 that ensures the sum converges. It makes rewards from the uncertain far future less important for our agent than the ones in the near future that it can be fairly confident about.
 
 The main idea behind Q-learning is that if we had a function ![alt text](images/eq3.png "Equation 3"), that could tell us what our return would be, if we were to take an action in a given state, then we could easily construct a policy that maximizes our rewards:
 
