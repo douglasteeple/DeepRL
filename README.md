@@ -62,7 +62,156 @@ Q-network
 
 Our model will be a convolutional neural network that takes in the difference between the current and previous screen patches. It has two outputs, representing Q(s,left) and Q(s,right) (where s is the input to the network). In effect, the network is trying to predict the quality of taking each action given the current input.
 
-The probability of choosing a random action will start at EPS_START and will decay exponentially towards EPS_END. EPS_DECAY controls the rate of the decay.
+```Python
+class DQN(nn.Module):
+
+    def __init__(self):
+        super(DQN, self).__init__()
+        self.conv1 = nn.Conv2d(3, 16, kernel_size=5, stride=2)
+        self.bn1 = nn.BatchNorm2d(16)
+        self.conv2 = nn.Conv2d(16, 32, kernel_size=5, stride=2)
+        self.bn2 = nn.BatchNorm2d(32)
+        self.conv3 = nn.Conv2d(32, 32, kernel_size=5, stride=2)
+        self.bn3 = nn.BatchNorm2d(32)
+        self.head = nn.Linear(448, 2)
+
+    def forward(self, x):
+        x = F.relu(self.bn1(self.conv1(x)))
+        x = F.relu(self.bn2(self.conv2(x)))
+        x = F.relu(self.bn3(self.conv3(x)))
+        return self.head(x.view(x.size(0), -1))
+```
+
+### Training
+
+#### Hyperparameters and utilities
+
+This cell instantiates our model and its optimizer, and defines some utilities:
+
+select_action - will select an action accordingly to an epsilon greedy policy. Simply put, we’ll sometimes use our model for choosing the action, and sometimes we’ll just sample one uniformly. The probability of choosing a random action will start at EPS_START and will decay exponentially towards EPS_END. EPS_DECAY controls the rate of the decay.
+
+```Python
+BATCH_SIZE = 128
+GAMMA = 0.999
+EPS_START = 0.9
+EPS_END = 0.05
+EPS_DECAY = 200
+TARGET_UPDATE = 10
+
+policy_net = DQN().to(device)
+target_net = DQN().to(device)
+target_net.load_state_dict(policy_net.state_dict())
+target_net.eval()
+
+optimizer = optim.RMSprop(policy_net.parameters())
+memory = ReplayMemory(10000)
+
+
+steps_done = 0
+
+
+def select_action(state):
+    global steps_done
+    sample = random.random()
+    eps_threshold = EPS_END + (EPS_START - EPS_END) * \
+        math.exp(-1. * steps_done / EPS_DECAY)
+    steps_done += 1
+    if sample > eps_threshold:
+        with torch.no_grad():
+            return policy_net(state).max(1)[1].view(1, 1)
+    else:
+        return torch.tensor([[random.randrange(2)]], device=device, dtype=torch.long)
+
+```
+
+Here we can see...
+
+### Training loop
+
+Finally, the code for training our model.
+
+Here, you can find an optimize_model function that performs a single step of the optimization. It first samples a batch, concatenates all the tensors into a single one, computes Q(st,at) and V(st+1)=maxa Q(st+1,a), and combines them into our loss. By defition we set V(s)=0 if s is a terminal state. We also use a target network to compute V(st+1) for added stability. The target network has its weights kept frozen most of the time, but is updated with the policy network’s weights every so often. This is usually a set number of steps but we shall use episodes for simplicity.
+
+```Python
+def optimize_model():
+    if len(memory) < BATCH_SIZE:
+        return
+    transitions = memory.sample(BATCH_SIZE)
+    # Transpose the batch (see http://stackoverflow.com/a/19343/3343043 for
+    # detailed explanation).
+    batch = Transition(*zip(*transitions))
+
+    # Compute a mask of non-final states and concatenate the batch elements
+    non_final_mask = torch.tensor(tuple(map(lambda s: s is not None,
+                                          batch.next_state)), device=device, dtype=torch.uint8)
+    non_final_next_states = torch.cat([s for s in batch.next_state
+                                                if s is not None])
+    state_batch = torch.cat(batch.state)
+    action_batch = torch.cat(batch.action)
+    reward_batch = torch.cat(batch.reward)
+
+    # Compute Q(s_t, a) - the model computes Q(s_t), then we select the
+    # columns of actions taken
+    state_action_values = policy_net(state_batch).gather(1, action_batch)
+
+    # Compute V(s_{t+1}) for all next states.
+    next_state_values = torch.zeros(BATCH_SIZE, device=device)
+    next_state_values[non_final_mask] = target_net(non_final_next_states).max(1)[0].detach()
+    # Compute the expected Q values
+    expected_state_action_values = (next_state_values * GAMMA) + reward_batch
+
+    # Compute Huber loss
+    loss = F.smooth_l1_loss(state_action_values, expected_state_action_values.unsqueeze(1))
+
+    # Optimize the model
+    optimizer.zero_grad()
+    loss.backward()
+    for param in policy_net.parameters():
+        param.grad.data.clamp_(-1, 1)
+    optimizer.step()
+```
+
+Below, you can find the main training loop. At the beginning we reset the environment and initialize the state Tensor. Then, we sample an action, execute it, observe the next screen and the reward (always 1), and optimize our model once. When the episode ends (our model fails), we restart the loop.
+
+```Python
+num_episodes = 50
+for i_episode in range(num_episodes):
+    # Initialize the environment and state
+    env.reset()
+    last_screen = get_screen()
+    current_screen = get_screen()
+    state = current_screen - last_screen
+    for t in count():
+        # Select and perform an action
+        action = select_action(state)
+        _, reward, done, _ = env.step(action.item())
+        reward = torch.tensor([reward], device=device)
+
+        # Observe new state
+        last_screen = current_screen
+        current_screen = get_screen()
+        if not done:
+            next_state = current_screen - last_screen
+        else:
+            next_state = None
+
+        # Store the transition in memory
+        memory.push(state, action, next_state, reward)
+
+        # Move to the next state
+        state = next_state
+
+        # Perform one step of the optimization (on the target network)
+        optimize_model()
+        if done:
+            episode_durations.append(t + 1)
+            plot_durations()
+            break
+    # Update the target network
+    if i_episode % TARGET_UPDATE == 0:
+        target_net.load_state_dict(policy_net.state_dict())
+```
+
 
 ## Challenge Part 3
 
@@ -158,7 +307,7 @@ So, what can we see from these graphs? Well:
   * Accuracy settling happens by 50 episodes and does not improve much up to 100 episodes.
   * LSTM-512 needed the maxEpisodes parameter changed to 400.
 
-The challenge was made more difficult due to hiddent replays. The folder `~/.nv` contains replays. All replay for any learned behaviour prior to Challenge 3 would cause it to fail by repeating the static cylinder scenarios.
+The challenge was made more difficult due to hiddent replays. The folder `~/.nv` contains replays. All replays for any learned behaviour prior to Challenge 3 would cause Challenge 3 to fail by repeating the static cylinder scenarios.
 
 Having the cylinder move from run to run causes issues for the learning accuracy since the robot tends to return to where it found the cylinder before. Instinctively, in order to learn in this new circumstance, the LSTM size should increase to accomodate the more complex task. So the next step is to set the learning rate to 0.1, the LSTM size to 512 and let the maximum number of episodes in a run extend into the thousands.
 
