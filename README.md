@@ -115,7 +115,7 @@ maxEpisodeLength = 200;		// TUNE was 100
 
 In order to improve these results, I added a loop changing both learning rate from 0.05 to 0.45, and changing the LSTM size from 64, 128, 256, to 512. This plot shows the results:
 
-![alt text](images/tuning.png "Challenge part 3 tuning")
+![alt text](images/plot.png "Challenge part 3 tuning")
 
 So, what can we see from these graphs? Well:
 
