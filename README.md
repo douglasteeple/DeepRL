@@ -273,7 +273,7 @@ static float VELOCITY_MAX  = 0.2f;
 
 static bool ALLOW_RANDOM = true;
 static bool DEBUG_DQN = false;
-static float GAMMA = 0.9f;
+static float GAMMA = 0.999f;
 static float EPS_START = 0.9f;
 static float EPS_END = 0.05f;
 static int EPS_DECAY = 200;
@@ -284,12 +284,12 @@ static int INPUT_CHANNELS  = 3;
 static const char *OPTIMIZER = "RMSprop";
 static float LearningRate  = 0.1f;
 static int REPLAY_MEMORY   = 10000;
-static int BATCH_SIZE      = 64;
+static int BATCH_SIZE      = 32;
 static bool USE_LSTM       = true;
 static int LSTMSize        = 512;
 
 // smoothing of delta
-const float alpha = 0.05;	// 5% current dist, 95% historical average
+const float alpha = 0.1;	// 10% current dist, 90% historical average
 
 actionJointDelta = 0.1f;
 actionVelDelta   = 0.05f;	// TUNE was 0.1
@@ -309,8 +309,10 @@ So, what can we see from these graphs? Well:
   * Accuracy settling happens by 50 episodes and does not improve much up to 100 episodes.
   * LSTM-512 needed the maxEpisodes parameter changed to 400.
 
-The challenge was made more difficult due to hiddent replays. The folder `~/.nv` contains replays. All replays for any learned behaviour prior to Challenge 3 would cause Challenge 3 to fail by repeating the static cylinder scenarios.
-
 Having the cylinder move from run to run causes issues for the learning accuracy since the robot tends to return to where it found the cylinder before. Instinctively, in order to learn in this new circumstance, the LSTM size should increase to accomodate the more complex task. So the next step is to set the learning rate to 0.1, the LSTM size to 512 and let the maximum number of episodes in a run extend into the thousands.
+
+I finally realized that one camera as given could never operate the base joint since it can't see from above. So I added another camera and combined the results:
+
+![alt text](images/TwoCameras.png "Two cameras")
 
 
