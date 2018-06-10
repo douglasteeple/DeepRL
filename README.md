@@ -315,4 +315,9 @@ I finally realized that one camera as given could never operate the base joint s
 
 ![alt text](images/TwoCameras.png "Two cameras")
 
+With 3 cameras:
+
+![alt text](images/ThreeCameras.png "Three cameras")
+
+
 
