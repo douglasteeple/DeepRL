@@ -15,13 +15,13 @@ set ylabel word(firstrow, 3)
 set yrange [0:1]
 set xrange [0:100]
 
-set key box samplen 1 spacing .5 font ",5" width 0
+set key box samplen 1 spacing .5 font ",5" width -0.5
 
-set multiplot layout 2,2 rowsfirst title "Robo-ND DeepRL LSTM Size and Learning Rate Plots\nDouglas Teeple June 2018" font "Bold-Times-Roman,12"
+set multiplot layout 2,2 rowsfirst title "Robo-ND Deep Q RL LSTM Size and Learning Rate Plots\nDouglas Teeple June 2018" font "Bold-Times-Roman,12"
 set macros
 POS  = "at graph 0.2,0.9 font ',8'"
 POS2 = "at graph 0.2,0.8 font ',8'"
-SKIPPER = "every ::1 using 2:3  title columnheader(7) with lines"
+SKIPPER = "every ::1 using 2:3 title columnheader(7) with lines"
 
 do for [n in "64 128 256 512"] {
 	stats 'gazebo-arm-'.n.'.plt' using 3 every ::50 nooutput
