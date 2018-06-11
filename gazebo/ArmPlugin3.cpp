@@ -18,18 +18,23 @@ static float BASE_JOINT_MIN = -0.75f;
 static float BASE_JOINT_MAX =  0.75f;
 
 // Turn on velocity based control
-static bool VELOCITY_CONTROL = true;
+#define VELOCITY_CONTROL 1
 static float VELOCITY_MIN = -0.2f;
 static float VELOCITY_MAX  = 0.2f;
 
 // Define DQN API Settings
 
-static bool ALLOW_RANDOM = true;
-static bool DEBUG_DQN = false;
-static float GAMMA = 0.9f;
-static float EPS_START = 0.9f;
-static float EPS_END = 0.05f;
-static int EPS_DECAY = 200;
+/*
+ * The probability of choosing a random action will start at EPS_START
+ * and will decay exponentially towards EPS_END. EPS_DECAY controls the 
+ * rate of the decay.
+*/
+static bool  ALLOW_RANDOM	= true;
+static bool  DEBUG_DQN		= false;
+static float GAMMA			= 0.999f;
+static float EPS_START		= 0.05f;			// TUNE was 0.9
+static float EPS_END		= 0.05f;		// TUNE was 0.05
+static int	 EPS_DECAY		= 200;
 
 /*
 / DONE - Tune the following hyperparameters
@@ -40,11 +45,11 @@ static int INPUT_WIDTH     = 64;
 static int INPUT_HEIGHT    = 64;
 static int INPUT_CHANNELS  = 3;
 static const char *OPTIMIZER = "RMSprop";
-static float LearningRate  = 0.05f;		// TUNE was 0.1
+static float LearningRate  = 0.0001f;	// TUNE was 0.1
 static int REPLAY_MEMORY   = 10000;		// TUNE was 10000
-static int BATCH_SIZE      = 64;
+static int BATCH_SIZE      = 32;
 static bool USE_LSTM       = true;
-static int LSTMSize        = 512;
+static int LSTMSize        = 128;
 
 static float maxLearningRate = 0.0;
 
@@ -94,7 +99,7 @@ static float maxLearningRate = 0.0;
 #define LOCKBASE false
 
 
-const char *action_strs[] = {"No Action", "Joint 0", "Joint 1", "Joint 2", "Joint 3"};
+const char *action_strs[] = {"No Action", "Base-", "Base+", "Joint 1-", "Joint 1+", "Joint 2-", "Joint 2+", "Joint 3-", "Joint 3+", "Oops-", "Oops+"};
 
 typedef enum Colors {Red, BoldRed, Green, BoldGreen, Yellow, BoldYellow, Blue, BoldBlue, Magenta, BoldMagenta, Cyan, BoldCyan, Reset_} Colors_t;
 const char *colorTable[] = {
@@ -132,7 +137,11 @@ GZ_REGISTER_MODEL_PLUGIN(ArmPlugin)
 static float BoxDistance(const math::Box& a, const math::Box& b);
 
 // constructor
-ArmPlugin::ArmPlugin() : ModelPlugin(), cameraNode(new gazebo::transport::Node()), collisionNode(new gazebo::transport::Node())
+ArmPlugin::ArmPlugin() : ModelPlugin(), 
+	cameraNode(new gazebo::transport::Node()), 
+	cameraNode2(new gazebo::transport::Node()), 
+	cameraNode3(new gazebo::transport::Node()), 
+	collisionNode(new gazebo::transport::Node())
 {
 	std::cout << colorTable[Green] << "ArmPlugin::ArmPlugin()" << colorTable[Reset_] << std::endl;
 
@@ -148,13 +157,21 @@ ArmPlugin::ArmPlugin() : ModelPlugin(), cameraNode(new gazebo::transport::Node()
 	}
 
 	agent 	         = NULL;
+	agent2 	         = NULL;
+	agent3 	         = NULL;
 	inputState       = NULL;
+	inputState2      = NULL;
+	inputState3      = NULL;
 	inputBuffer[0]   = NULL;
 	inputBuffer[1]   = NULL;
+	inputBuffer2[0]  = NULL;
+	inputBuffer2[1]  = NULL;
+	inputBuffer3[0]  = NULL;
+	inputBuffer3[1]  = NULL;
 	inputBufferSize  = 0;
 	inputRawWidth    = 0;
 	inputRawHeight   = 0;
-	actionJointDelta = 0.1f;
+	actionJointDelta = 0.05f;	// TUNE was 0.1
 	actionVelDelta   = 0.05f;	// TUNE was 0.1
 	maxEpisodeLength = 200;		// TUNE was 100
 	episodeFrames    = 0;
@@ -217,16 +234,18 @@ void ArmPlugin::Load(physics::ModelPtr _parent, sdf::ElementPtr /*_sdf*/)
 	this->model = _parent;
 	this->j2_controller = new physics::JointController(model);
 
-	// Create our node for camera communication
+	// Create our nodes for camera communication
 	cameraNode->Init();
-	
+	cameraNode2->Init();
+	cameraNode3->Init();
 	/*
 	/ DONE - Subscribe to camera topic
 	/
 	*/
 	
 	cameraSub = cameraNode->Subscribe("/gazebo/" WORLD_NAME "/camera/link/camera/image", &ArmPlugin::onCameraMsg, this);
-
+	cameraSub2 = cameraNode2->Subscribe("/gazebo/" WORLD_NAME "/camera2/link/camera/image", &ArmPlugin::onCameraMsg2, this);
+	cameraSub3 = cameraNode3->Subscribe("/gazebo/" WORLD_NAME "/camera3/link/camera/image", &ArmPlugin::onCameraMsg3, this);
 	// Create our node for collision detection
 	collisionNode->Init();
 		
@@ -247,7 +266,10 @@ bool ArmPlugin::createAgent()
 {
 	if( agent != NULL )
 		delete agent;
-
+	if( agent2 != NULL )
+		delete agent2;
+	if( agent3 != NULL )
+		delete agent3;
 			
 	/*
 	/ DONE - Create DQN Agent
@@ -258,10 +280,18 @@ bool ArmPlugin::createAgent()
 						OPTIMIZER, LearningRate, REPLAY_MEMORY, BATCH_SIZE,
 						GAMMA, EPS_START, EPS_END, EPS_DECAY, 
 						USE_LSTM, LSTMSize, ALLOW_RANDOM, DEBUG_DQN);
+	agent2 = dqnAgent::Create(INPUT_WIDTH, INPUT_HEIGHT, INPUT_CHANNELS, DOF*2, 
+						OPTIMIZER, LearningRate, REPLAY_MEMORY, BATCH_SIZE,
+						GAMMA, EPS_START, EPS_END, EPS_DECAY, 
+						USE_LSTM, LSTMSize, ALLOW_RANDOM, DEBUG_DQN);
+	agent3 = dqnAgent::Create(INPUT_WIDTH, INPUT_HEIGHT, INPUT_CHANNELS, DOF*2, 
+						OPTIMIZER, LearningRate, REPLAY_MEMORY, BATCH_SIZE,
+						GAMMA, EPS_START, EPS_END, EPS_DECAY, 
+						USE_LSTM, LSTMSize, ALLOW_RANDOM, DEBUG_DQN);
 
-	if( !agent )
+	if( !agent || !agent2 || !agent3)
 	{
-		fprintf(stderr, "ArmPlugin - failed to create DQN agent\n");
+		fprintf(stderr, "ArmPlugin - failed to create DQN agents\n");
 		return false;
 	}
 
@@ -270,8 +300,14 @@ bool ArmPlugin::createAgent()
 	if (!inputState) {
 		inputState = Tensor::Alloc(INPUT_WIDTH, INPUT_HEIGHT, INPUT_CHANNELS);
 	}
+	if (!inputState2) {
+		inputState2 = Tensor::Alloc(INPUT_WIDTH, INPUT_HEIGHT, INPUT_CHANNELS);
+	}
+	if (!inputState3) {
+		inputState3 = Tensor::Alloc(INPUT_WIDTH, INPUT_HEIGHT, INPUT_CHANNELS);
+	}
 	
-	if( !inputState )
+	if( !inputState || !inputState2 || !inputState3)
 	{
 		fprintf(stderr, "ArmPlugin - failed to allocate %ux%ux%u Tensor\n", INPUT_WIDTH, INPUT_HEIGHT, INPUT_CHANNELS);
 		return false;
@@ -282,7 +318,7 @@ bool ArmPlugin::createAgent()
 
 
 
-// onCameraMsg
+// onCameraMsgs
 void ArmPlugin::onCameraMsg(ConstImageStampedPtr &_msg)
 {
 	// don't process the image if the agent hasn't been created yet
@@ -332,6 +368,103 @@ void ArmPlugin::onCameraMsg(ConstImageStampedPtr &_msg)
 
 }
 
+void ArmPlugin::onCameraMsg2(ConstImageStampedPtr &_msg)
+{
+	// don't process the image if the agent hasn't been created yet
+	if( !agent2 )
+		return;
+
+	// check the validity of the message contents
+	if( !_msg )
+	{
+		fprintf(stderr, "ArmPlugin - recieved NULL message\n");
+		return;
+	}
+
+	// retrieve image dimensions
+	
+	const int width  = _msg->image().width();
+	const int height = _msg->image().height();
+	const int bpp    = (_msg->image().step() / _msg->image().width()) * 8;	// bits per pixel
+	const int size   = _msg->image().data().size();
+
+	if( bpp != 24 )
+	{
+		fprintf(stderr, "ArmPlugin - expected 24BPP uchar3 image from camera, got %i\n", bpp);
+		return;
+	}
+
+	// allocate temp image if necessary
+	if( !inputBuffer2[0] || size != inputBufferSize )
+	{
+		if( !cudaAllocMapped(&inputBuffer2[0], &inputBuffer2[1], size) )
+		{
+			fprintf(stderr, "ArmPlugin - cudaAllocMapped() failed to allocate %i bytes\n", size);
+			return;
+		}
+
+		if(DEBUG3) {printf("ArmPlugin - allocated camera img buffer %ix%i  %i bpp  %i bytes\n", width, height, bpp, size);}
+		
+		inputBufferSize = size;
+		inputRawWidth   = width;
+		inputRawHeight  = height;
+	}
+
+	memcpy(inputBuffer2[0], _msg->image().data().c_str(), inputBufferSize);
+	newState = true;
+
+	if(DEBUG3){printf("camera2 %i x %i  %i bpp  %i bytes\n", width, height, bpp, size);}
+
+}
+
+void ArmPlugin::onCameraMsg3(ConstImageStampedPtr &_msg)
+{
+	// don't process the image if the agent hasn't been created yet
+	if( !agent3 )
+		return;
+
+	// check the validity of the message contents
+	if( !_msg )
+	{
+		fprintf(stderr, "ArmPlugin - recieved NULL message\n");
+		return;
+	}
+
+	// retrieve image dimensions
+	
+	const int width  = _msg->image().width();
+	const int height = _msg->image().height();
+	const int bpp    = (_msg->image().step() / _msg->image().width()) * 8;	// bits per pixel
+	const int size   = _msg->image().data().size();
+
+	if( bpp != 24 )
+	{
+		fprintf(stderr, "ArmPlugin - expected 24BPP uchar3 image from camera, got %i\n", bpp);
+		return;
+	}
+
+	// allocate temp image if necessary
+	if( !inputBuffer3[0] || size != inputBufferSize )
+	{
+		if( !cudaAllocMapped(&inputBuffer3[0], &inputBuffer3[1], size) )
+		{
+			fprintf(stderr, "ArmPlugin - cudaAllocMapped() failed to allocate %i bytes\n", size);
+			return;
+		}
+
+		if(DEBUG3) {printf("ArmPlugin - allocated camera img buffer %ix%i  %i bpp  %i bytes\n", width, height, bpp, size);}
+		
+		inputBufferSize = size;
+		inputRawWidth   = width;
+		inputRawHeight  = height;
+	}
+
+	memcpy(inputBuffer3[0], _msg->image().data().c_str(), inputBufferSize);
+	newState = true;
+
+	if(DEBUG3){printf("camera3 %i x %i  %i bpp  %i bytes\n", width, height, bpp, size);}
+
+}
 
 // onCollisionMsg
 void ArmPlugin::onCollisionMsg(ConstContactsPtr &contacts)
@@ -414,6 +547,7 @@ void ArmPlugin::onCollisionMsg(ConstContactsPtr &contacts)
 
 
 // upon receiving a new frame, update the AI agent
+// head on camera
 bool ArmPlugin::updateAgent()
 {
 	// convert uchar3 input from camera to planar BGR
@@ -428,13 +562,15 @@ bool ArmPlugin::updateAgent()
 
 	// select the next action
 	int action = 0;
-
+#if WANTCAMERA1
 	if( !agent->NextAction(inputState, &action) )
 	{
 		fprintf(stderr, "ArmPlugin - failed to generate agent's next action\n");
 		return false;
 	}
-
+#else
+	return false;
+#endif
 	// make sure the selected action is in-bounds
 	if( action < 0 || action >= DOF * 2 )
 	{
@@ -442,7 +578,7 @@ bool ArmPlugin::updateAgent()
 		return false;
 	}
 
-	if(DEBUG2){printf("ArmPlugin - agent selected action %s\n", action_strs[action]);}
+	if(DEBUG2){printf("Agent selected action %s\n", action_strs[action]);}
 
 #if VELOCITY_CONTROL
 	// if the action is even, increase the joint position by the delta parameter
@@ -504,6 +640,192 @@ bool ArmPlugin::updateAgent()
 	return true;
 }
 
+// camera above
+bool ArmPlugin::updateAgent2()
+{
+	// convert uchar3 input from camera to planar BGR
+	if( CUDA_FAILED(cudaPackedToPlanarBGR((uchar3*)inputBuffer2[1], inputRawWidth, inputRawHeight,
+							         inputState2->gpuPtr, INPUT_WIDTH, INPUT_HEIGHT)) )
+	{
+		fprintf(stderr, "ArmPlugin - failed to convert %zux%zu image to %ux%u planar BGR image\n",
+			   inputRawWidth, inputRawHeight, INPUT_WIDTH, INPUT_HEIGHT);
+
+		return false;
+	}
+
+	// select the next action
+	int action = 0;
+#if WANTCAMERA2
+	if( !agent2->NextAction(inputState2, &action) )
+	{
+		fprintf(stderr, "ArmPlugin - failed to generate agent's next action\n");
+		return false;
+	}
+#else
+	return false;
+#endif
+	// make sure the selected action is in-bounds
+	if( action < 0 || action >= DOF * 2 )
+	{
+		fprintf(stderr, "Agent selected invalid action, %i\n", action);
+		return false;
+	}
+
+	if(DEBUG2){printf("Agent selected action %s\n", action_strs[action]);}
+
+
+#if VELOCITY_CONTROL
+	// if the action is even, increase the joint position by the delta parameter
+	// if the action is odd,  decrease the joint position by the delta parameter
+
+		
+	/*
+	/ DONE - Increase or decrease the joint velocity based on whether the action is even or odd
+	/
+	*/
+	
+	const int jointIdx = action / 2;
+
+	float velocity = vel[jointIdx] + actionVelDelta * ((action % 2 == 0) ? 1.0f : -1.0f);
+
+	if( velocity < VELOCITY_MIN )
+		velocity = VELOCITY_MIN;
+
+	if( velocity > VELOCITY_MAX )
+		velocity = VELOCITY_MAX;
+
+	vel[jointIdx] = velocity;
+	
+	for( uint32_t n=0; n < DOF; n++ )
+	{
+		ref[n] += vel[n];
+
+		if( ref[n] < JOINT_MIN )
+		{
+			ref[n] = JOINT_MIN;
+			vel[n] = 0.0f;
+		}
+		else if( ref[n] > JOINT_MAX )
+		{
+			ref[n] = JOINT_MAX;
+			vel[n] = 0.0f;
+		}
+	}
+#else
+	
+	/*
+	/ DONE - Increase or decrease the joint position based on whether the action is even or odd
+	/
+	*/
+	const int jointIdx = action / 2;
+	float joint = ref[jointIdx] + actionJointDelta * ((action % 2 == 0) ? 1.0f : -1.0f);
+
+	// limit the joint to the specified range
+	if( joint < JOINT_MIN )
+		joint = JOINT_MIN;
+	
+	if( joint > JOINT_MAX )
+		joint = JOINT_MAX;
+
+	ref[jointIdx] = joint;
+
+#endif
+
+	return true;
+}
+
+// angle shot
+bool ArmPlugin::updateAgent3()
+{
+	// convert uchar3 input from camera to planar BGR
+	if( CUDA_FAILED(cudaPackedToPlanarBGR((uchar3*)inputBuffer3[1], inputRawWidth, inputRawHeight,
+							         inputState3->gpuPtr, INPUT_WIDTH, INPUT_HEIGHT)) )
+	{
+		fprintf(stderr, "ArmPlugin - failed to convert %zux%zu image to %ux%u planar BGR image\n",
+			   inputRawWidth, inputRawHeight, INPUT_WIDTH, INPUT_HEIGHT);
+
+		return false;
+	}
+
+	// select the next action
+	int action = 0;
+#if WANTCAMERA3
+	if( !agent3->NextAction(inputState3, &action) )
+	{
+		fprintf(stderr, "ArmPlugin - failed to generate agent's next action\n");
+		return false;
+	}
+#else
+	return false;
+#endif
+	// make sure the selected action is in-bounds
+	if( action < 0 || action >= DOF * 2 )
+	{
+		fprintf(stderr, "Agent selected invalid action, %i\n", action);
+		return false;
+	}
+
+	if(DEBUG2){printf("Agent selected action %s\n", action_strs[action]);}
+
+#if VELOCITY_CONTROL
+	// if the action is even, increase the joint position by the delta parameter
+	// if the action is odd,  decrease the joint position by the delta parameter
+
+		
+	/*
+	/ DONE - Increase or decrease the joint velocity based on whether the action is even or odd
+	/
+	*/
+	
+	const int jointIdx = action / 2;
+
+	float velocity = vel[jointIdx] + actionVelDelta * ((action % 2 == 0) ? 1.0f : -1.0f);
+
+	if( velocity < VELOCITY_MIN )
+		velocity = VELOCITY_MIN;
+
+	if( velocity > VELOCITY_MAX )
+		velocity = VELOCITY_MAX;
+
+	vel[jointIdx] = velocity;
+	
+	for( uint32_t n=0; n < DOF; n++ )
+	{
+		ref[n] += vel[n];
+
+		if( ref[n] < JOINT_MIN )
+		{
+			ref[n] = JOINT_MIN;
+			vel[n] = 0.0f;
+		}
+		else if( ref[n] > JOINT_MAX )
+		{
+			ref[n] = JOINT_MAX;
+			vel[n] = 0.0f;
+		}
+	}
+#else
+	
+	/*
+	/ DONE - Increase or decrease the joint position based on whether the action is even or odd
+	/
+	*/
+	const int jointIdx = action / 2;
+	float joint = ref[jointIdx] + actionJointDelta * ((action % 2 == 0) ? 1.0f : -1.0f);
+
+	// limit the joint to the specified range
+	if( joint < JOINT_MIN )
+		joint = JOINT_MIN;
+	
+	if( joint > JOINT_MAX )
+		joint = JOINT_MAX;
+
+	ref[jointIdx] = joint;
+
+#endif
+
+	return true;
+}
 
 // update joint reference positions, returns true if positions have been modified
 bool ArmPlugin::updateJoints()
@@ -517,7 +839,7 @@ bool ArmPlugin::updateJoints()
 		if( animationStep < ANIMATION_STEPS )
 		{
 			animationStep++;
-			printf("animation step %u\n", animationStep);
+			if (DEBUG3) printf("animation step %u\n", animationStep);
 
 			for( uint32_t n=0; n < DOF; n++ )
 				ref[n] = JOINT_MIN + step * float(animationStep);
@@ -525,7 +847,7 @@ bool ArmPlugin::updateJoints()
 		else if( animationStep < ANIMATION_STEPS * 2 )
 		{			
 			animationStep++;
-			printf("animation step %u\n", animationStep);
+			if (DEBUG3) printf("animation step %u\n", animationStep);
 
 			for( uint32_t n=0; n < DOF; n++ )
 				ref[n] = JOINT_MAX - step * float(animationStep-ANIMATION_STEPS);
@@ -583,10 +905,11 @@ bool ArmPlugin::updateJoints()
 		// reset camera ready flag
 		newState = false;
 
-		if( updateAgent() )
-			return true;
+		bool updated1 = (agent?updateAgent():false);
+		bool updated2 = (agent2?updateAgent2():false);
+		bool updated3 = (agent3?updateAgent3():false);
+		return updated1||updated2||updated3;
 	}
-
 	return false;
 }
 
@@ -649,7 +972,7 @@ void ArmPlugin::OnUpdate(const common::UpdateInfo& updateInfo)
 		if( !createAgent() )
 			return;
 	}
-
+#if MULTIPLOT_RUNS
 	if ((endEpisode && totalRuns >= 100) || (totalRuns >= 102)) {
 		// tune a parameter and create a new agent
 		maxLearningRate = (LearningRate>maxLearningRate?LearningRate:maxLearningRate);
@@ -662,6 +985,8 @@ void ArmPlugin::OnUpdate(const common::UpdateInfo& updateInfo)
 		successfulGrabs = 0;
 		return;
 	}
+#endif
+
 	// verify that the agent is loaded
 	if( !agent )
 		return;
@@ -751,7 +1076,7 @@ void ArmPlugin::OnUpdate(const common::UpdateInfo& updateInfo)
 			if( episodeFrames > 1 )
 			{
 				const float distDelta  = lastGoalDistance - distGoal;
-				const float alpha = 0.05;	// 10% current dist, 90% historical average
+				const float alpha = 0.1;	// 10% current dist, 90% historical average
 
 				// compute the smoothed moving average of the delta of the distance to the goal
 				avgGoalDelta  = (distDelta * alpha) + (avgGoalDelta * (1 - alpha));
@@ -767,19 +1092,21 @@ void ArmPlugin::OnUpdate(const common::UpdateInfo& updateInfo)
 	// issue rewards and train DQN
 	if( newReward && agent != NULL )
 	{
-		if(DEBUG2){printf("\033[1;32mIssuing reward %f, EOE=%s  %s\033[0m\n", rewardHistory, endEpisode ? "true" : "false", (rewardHistory > 0.1f) ? "POS+" :(rewardHistory > 0.0f) ? "POS" : (rewardHistory < 0.0f) ? "    NEG" : "       ZERO");}
+		if(DEBUG2){printf("\033[1;32mIssuing reward %f, %s %s\033[0m\n", rewardHistory, (endEpisode ? "EOE" : ""), (rewardHistory > 0.1f) ? "POS+" :(rewardHistory > 0.0f) ? "POS" : (rewardHistory < 0.0f) ? "    NEG" : "       ZERO");}
 
 		const uint32_t RUN_HISTORY = sizeof(runHistory);
 		uint32_t historyWins = 0;
 
 		// send reward to DQN
-		agent->NextReward(rewardHistory, endEpisode);
+		if (agent)  agent->NextReward(rewardHistory, endEpisode);
+		if (agent2) agent2->NextReward(rewardHistory, endEpisode);
+		if (agent3) agent3->NextReward(rewardHistory, endEpisode);
 
 		// reset reward indicator
 		newReward = false;
 
 		// reset for next episode
-		if( endEpisode )
+		if ( endEpisode )
 		{
 			testAnimation    = true;	// reset the robot to base position
 			loopAnimation    = false;
@@ -828,7 +1155,7 @@ void ArmPlugin::OnUpdate(const common::UpdateInfo& updateInfo)
 		}
 		if (episodeFrames > 1) {
 			// xterm title bar
-			printf("%sAcc: %0.2f (%03u of %03u),Rew=%.2f AvgD=%.2f Dist=%.2f %s", xtermTitle, float(successfulGrabs)/float(totalRuns), successfulGrabs, totalRuns, rewardHistory, avgGoalDelta, distGoal, xtermEndTitle);
+			printf("%sAcu: %0.2f (%03u of %03u),Rew=%.2f Delta=%.2f%s", xtermTitle, float(successfulGrabs)/float(totalRuns), successfulGrabs, totalRuns, rewardHistory, avgGoalDelta, xtermEndTitle);
 		}
 	}
 }
