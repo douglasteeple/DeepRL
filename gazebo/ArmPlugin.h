@@ -32,6 +32,10 @@
 #include <syslog.h>
 #include <time.h>
 
+#define WANTCAMERA1 1		// original
+#define WANTCAMERA2 1		// overhead
+#define WANTCAMERA3 0		// angled
+#define MULTIPLOT_RUNS 0
 
 namespace gazebo
 {
@@ -51,44 +55,54 @@ public:
 
 	bool createAgent();
 	bool updateAgent();
+	bool updateAgent2();
+	bool updateAgent3();
 	bool updateJoints();
 
 	void onCameraMsg(ConstImageStampedPtr &_msg);
+	void onCameraMsg2(ConstImageStampedPtr &_msg);
+	void onCameraMsg3(ConstImageStampedPtr &_msg);
 	void onCollisionMsg(ConstContactsPtr &contacts);
 
-	static const uint32_t DOF  = 3;	// active degrees of freedom in the arm
+	static const uint32_t DOF  = 4;	// was 3, added base active degrees of freedom in the arm
 
 private:
 	float ref[DOF];			// joint reference positions
 	float vel[DOF];			// joint velocity control
-	float dT[3];				// IK delta theta
+	float dT[3];			// IK delta theta
 
-	rlAgent* agent;			// AI learning agent instance
+	rlAgent* agent;				// AI learning agent instance
+	rlAgent* agent2;			// AI learning agent instance
+	rlAgent* agent3;			// AI learning agent instance
 	bool     newState;			// true if a new frame needs processed
 	bool     newReward;			// true if a new reward's been issued
 	bool     endEpisode;		// true if this episode is over
 	float    rewardHistory;		// value of the last reward issued
 	Tensor*  inputState;		// pyTorch input object to the agent
-	void*    inputBuffer[2];		// [0] for CPU and [1] for GPU
+	Tensor*  inputState2;		// pyTorch input object to the agent
+	Tensor*  inputState3;		// pyTorch input object to the agent
+	void*    inputBuffer[2];	// [0] for CPU and [1] for GPU camera 1
+	void*    inputBuffer2[2];	// [0] for CPU and [1] for GPU camera 2
+	void*    inputBuffer3[2];	// [0] for CPU and [1] for GPU camera 3
 	size_t   inputBufferSize;
 	size_t   inputRawWidth;
 	size_t   inputRawHeight;	
 	float    jointRange[DOF][2];	// min/max range of each arm joint
-	float    actionJointDelta;	// amount of offset caused to a joint by an action
+	float    actionJointDelta;		// amount of offset caused to a joint by an action
 	float    actionVelDelta;		// amount of velocity offset caused to a joint by an action
-	int	    maxEpisodeLength;	// maximum number of frames to win episode (or <= 0 for unlimited)
-	int      episodeFrames;		// frame counter for the current episode	
-	bool     testAnimation;		// true for test animation mode
-	bool     loopAnimation;		// loop the test animation while true
+	int	     maxEpisodeLength;		// maximum number of frames to win episode (or <= 0 for unlimited)
+	int      episodeFrames;			// frame counter for the current episode	
+	bool     testAnimation;			// true for test animation mode
+	bool     loopAnimation;			// loop the test animation while true
 	uint32_t animationStep;
 	float    resetPos[DOF];
 	float    lastGoalDistance;
 	float    avgGoalDelta;
-	int	    successfulGrabs;
-	int	    totalRuns;
+	int	     successfulGrabs;
+	int	     totalRuns;
 	int      runHistoryIdx;
-	int	    runHistoryMax;
-	bool     runHistory[20];
+	int	     runHistoryMax;
+	bool     runHistory[100];
 
 	physics::ModelPtr model;
 	event::ConnectionPtr updateConnection;
@@ -96,7 +110,10 @@ private:
 
 	gazebo::transport::NodePtr cameraNode;
 	gazebo::transport::SubscriberPtr cameraSub;
-
+	gazebo::transport::NodePtr cameraNode2;
+	gazebo::transport::SubscriberPtr cameraSub2;
+	gazebo::transport::NodePtr cameraNode3;
+	gazebo::transport::SubscriberPtr cameraSub3;
 	gazebo::transport::NodePtr collisionNode;
 	gazebo::transport::SubscriberPtr collisionSub;
 };
