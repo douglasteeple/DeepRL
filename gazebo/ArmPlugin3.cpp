@@ -32,7 +32,7 @@ static float VELOCITY_MAX  = 0.2f;
 static bool  ALLOW_RANDOM	= true;
 static bool  DEBUG_DQN		= false;
 static float GAMMA			= 0.999f;
-static float EPS_START		= 0.05f;			// TUNE was 0.9
+static float EPS_START		= 0.05f;		// TUNE was 0.9
 static float EPS_END		= 0.05f;		// TUNE was 0.05
 static int	 EPS_DECAY		= 200;
 
@@ -90,6 +90,12 @@ static float maxLearningRate = 0.0;
 #define CHECKGRIPPER true			// i.e. not the arm
 #define ONLYCHECKGRIPPER false		// i.e. the arm or the gripper
 
+#define WANTCAMERA1 1		// original
+#define WANTCAMERA2 1		// overhead
+#define WANTCAMERA3 0		// angled
+
+#define MULTIPLOT_RUNS 0	// for stepping through learning rates
+
 // Set Debug Mode
 #define DEBUG  true
 #define DEBUG2 false
@@ -98,11 +104,14 @@ static float maxLearningRate = 0.0;
 // Lock base rotation DOF (Add dof in header file if off)
 #define LOCKBASE false
 
+static const char *checkpointfile  = "../../../armplugin.cpt";
+static const char *checkpointfile2 = "../../../armplugin2.cpt";
+static const char *checkpointfile3 = "../../../armplugin3.cpt";
 
-const char *action_strs[] = {"No Action", "Base-", "Base+", "Joint 1-", "Joint 1+", "Joint 2-", "Joint 2+", "Joint 3-", "Joint 3+", "Oops-", "Oops+"};
+static const char *action_strs[] = {"No Action", "Base-", "Base+", "Joint 1-", "Joint 1+", "Joint 2-", "Joint 2+", "Joint 3-", "Joint 3+", "Oops-", "Oops+"};
 
 typedef enum Colors {Red, BoldRed, Green, BoldGreen, Yellow, BoldYellow, Blue, BoldBlue, Magenta, BoldMagenta, Cyan, BoldCyan, Reset_} Colors_t;
-const char *colorTable[] = {
+static const char *colorTable[] = {
 	"\033[0;31m",
 	"\033[1;31m",
 	"\033[0;32m",
@@ -173,20 +182,24 @@ ArmPlugin::ArmPlugin() : ModelPlugin(),
 	inputRawHeight   = 0;
 	actionJointDelta = 0.05f;	// TUNE was 0.1
 	actionVelDelta   = 0.05f;	// TUNE was 0.1
-	maxEpisodeLength = 200;		// TUNE was 100
+	maxEpisodeLength = 400;		// TUNE was 100
 	episodeFrames    = 0;
 
 	newState         = false;
 	newReward        = false;
 	endEpisode       = false;
 	rewardHistory    = 0.0f;
+	rewardHistory2   = 0.0f;
+	rewardHistory3   = 0.0f;
 	testAnimation    = true;
 	loopAnimation    = false;
 	animationStep    = 0;
 	lastGoalDistance = 0.0f;
 	avgGoalDelta     = 0.0f;
-	successfulGrabs = 0;
-	totalRuns       = 0;
+	lastGoalPlaneDistance = 0.0f;
+	avgGoalPlaneDelta= 0.0f;
+	successfulGrabs  = 0;
+	totalRuns        = 0;
 	runHistoryIdx    = 0;
 	runHistoryMax    = 0;
 
@@ -220,7 +233,7 @@ ArmPlugin::ArmPlugin() : ModelPlugin(),
 		jointRange[0][1] = BASE_JOINT_MAX;
 	}
 
-	std::clog << "SuccessfulGrabs TotalRuns Accuracy LearningRate maxLearningRate LSTMSize " << LearningRate << std::endl << std::flush;
+	std::clog << "SuccessfulGrabs TotalRuns Accuracy LearningRate maxLearningRate LSTMSize Last100Accuracy" << std::endl << std::flush;
 
 }
 
@@ -228,7 +241,7 @@ ArmPlugin::ArmPlugin() : ModelPlugin(),
 // Load
 void ArmPlugin::Load(physics::ModelPtr _parent, sdf::ElementPtr /*_sdf*/) 
 {
-	printf("ArmPlugin::Load('%s')\n", _parent->GetName().c_str());
+	std::cout << colorTable[Green] << "ArmPlugin::Load(" << _parent->GetName() << ")" << colorTable[Reset_] << std::endl;
 
 	// Store the pointer to the model
 	this->model = _parent;
@@ -276,6 +289,7 @@ bool ArmPlugin::createAgent()
 	/
 	*/
 	
+	std::cout << colorTable[Green] << "ArmPlugin::createAgent()" << colorTable[Reset_] << std::endl;
 	agent = dqnAgent::Create(INPUT_WIDTH, INPUT_HEIGHT, INPUT_CHANNELS, DOF*2, 
 						OPTIMIZER, LearningRate, REPLAY_MEMORY, BATCH_SIZE,
 						GAMMA, EPS_START, EPS_END, EPS_DECAY, 
@@ -294,7 +308,21 @@ bool ArmPlugin::createAgent()
 		fprintf(stderr, "ArmPlugin - failed to create DQN agents\n");
 		return false;
 	}
-
+    if (FILE *file = fopen(checkpointfile, "r")) {
+		std::cout << colorTable[Green] << "ArmPlugin::LoadCheckpoint(" <<  checkpointfile << ")" << colorTable[Reset_] << std::endl;
+		if (agent) agent->LoadCheckpoint(checkpointfile);
+        fclose(file);
+    }
+    if (FILE *file = fopen(checkpointfile2, "r")) {
+		std::cout << colorTable[Green] << "ArmPlugin::LoadCheckpoint(" <<  checkpointfile2 << ")" << colorTable[Reset_] << std::endl;
+		if (agent2) agent2->LoadCheckpoint(checkpointfile2);
+        fclose(file);
+    }
+    if (FILE *file = fopen(checkpointfile3, "r")) {
+		std::cout << colorTable[Green] << "ArmPlugin::LoadCheckpoint(" <<  checkpointfile3 << ")" << colorTable[Reset_] << std::endl;
+		if (agent3) agent3->LoadCheckpoint(checkpointfile3);
+        fclose(file);
+    }
 	// Allocate the python tensor for passing the camera state
 
 	if (!inputState) {
@@ -580,6 +608,11 @@ bool ArmPlugin::updateAgent()
 
 	if(DEBUG2){printf("Agent selected action %s\n", action_strs[action]);}
 
+	const int jointIdx = action / 2;
+	if (WANTCAMERA2 && jointIdx == 0) {	// camera2 controls the base joint
+		return false;
+	}
+
 #if VELOCITY_CONTROL
 	// if the action is even, increase the joint position by the delta parameter
 	// if the action is odd,  decrease the joint position by the delta parameter
@@ -590,8 +623,6 @@ bool ArmPlugin::updateAgent()
 	/
 	*/
 	
-	const int jointIdx = action / 2;
-
 	float velocity = vel[jointIdx] + actionVelDelta * ((action % 2 == 0) ? 1.0f : -1.0f);
 
 	if( velocity < VELOCITY_MIN )
@@ -623,7 +654,6 @@ bool ArmPlugin::updateAgent()
 	/ DONE - Increase or decrease the joint position based on whether the action is even or odd
 	/
 	*/
-	const int jointIdx = action / 2;
 	float joint = ref[jointIdx] + actionJointDelta * ((action % 2 == 0) ? 1.0f : -1.0f);
 
 	// limit the joint to the specified range
@@ -673,7 +703,11 @@ bool ArmPlugin::updateAgent2()
 
 	if(DEBUG2){printf("Agent selected action %s\n", action_strs[action]);}
 
+	const int jointIdx = action / 2;
 
+	if (WANTCAMERA2 && jointIdx != 0) {	// camera2 controls the base joint
+		return false;
+	}
 #if VELOCITY_CONTROL
 	// if the action is even, increase the joint position by the delta parameter
 	// if the action is odd,  decrease the joint position by the delta parameter
@@ -684,8 +718,6 @@ bool ArmPlugin::updateAgent2()
 	/
 	*/
 	
-	const int jointIdx = action / 2;
-
 	float velocity = vel[jointIdx] + actionVelDelta * ((action % 2 == 0) ? 1.0f : -1.0f);
 
 	if( velocity < VELOCITY_MIN )
@@ -717,7 +749,6 @@ bool ArmPlugin::updateAgent2()
 	/ DONE - Increase or decrease the joint position based on whether the action is even or odd
 	/
 	*/
-	const int jointIdx = action / 2;
 	float joint = ref[jointIdx] + actionJointDelta * ((action % 2 == 0) ? 1.0f : -1.0f);
 
 	// limit the joint to the specified range
@@ -765,6 +796,12 @@ bool ArmPlugin::updateAgent3()
 		return false;
 	}
 
+	const int jointIdx = action / 2;
+
+	if (WANTCAMERA2 && jointIdx == 0) {	// camera2 controls the base joint
+		return false;
+	}
+
 	if(DEBUG2){printf("Agent selected action %s\n", action_strs[action]);}
 
 #if VELOCITY_CONTROL
@@ -777,8 +814,6 @@ bool ArmPlugin::updateAgent3()
 	/
 	*/
 	
-	const int jointIdx = action / 2;
-
 	float velocity = vel[jointIdx] + actionVelDelta * ((action % 2 == 0) ? 1.0f : -1.0f);
 
 	if( velocity < VELOCITY_MIN )
@@ -810,7 +845,6 @@ bool ArmPlugin::updateAgent3()
 	/ DONE - Increase or decrease the joint position based on whether the action is even or odd
 	/
 	*/
-	const int jointIdx = action / 2;
 	float joint = ref[jointIdx] + actionJointDelta * ((action % 2 == 0) ? 1.0f : -1.0f);
 
 	// limit the joint to the specified range
@@ -920,7 +954,6 @@ float ArmPlugin::resetPosition( uint32_t dof )
 	return resetPos[dof];
 }
 
-
 // compute the distance between two bounding boxes
 static inline float BoxDistance(const math::Box& a, const math::Box& b)
 {
@@ -962,6 +995,54 @@ static inline float BoxDistance(const math::Box& a, const math::Box& b)
 	return sqrtf(sqrDist);
 }
 
+// compute the distance between two bounding boxes
+static inline float BoxZDistance(const math::Box& a, const math::Box& b)
+{
+	float sqrDist = 0;
+
+	if( b.max.z < a.min.z )
+	{
+		float d = b.max.z - a.min.z;
+		sqrDist += d * d;
+	}
+	else if( b.min.z > a.max.z )
+	{
+		float d = b.min.z - a.max.z;
+		sqrDist += d * d;
+	}
+	
+	return sqrtf(sqrDist);
+}
+
+static inline float BoxXYDistance(const math::Box& a, const math::Box& b)
+{
+	float sqrDist = 0;
+
+	if( b.max.x < a.min.x )
+	{
+		float d = b.max.x - a.min.x;
+		sqrDist += d * d;
+	}
+	else if( b.min.x > a.max.x )
+	{
+		float d = b.min.x - a.max.x;
+		sqrDist += d * d;
+	}
+
+	if( b.max.y < a.min.y )
+	{
+		float d = b.max.y - a.min.y;
+		sqrDist += d * d;
+	}
+	else if( b.min.y > a.max.y )
+	{
+		float d = b.min.y - a.max.y;
+		sqrDist += d * d;
+	}
+
+	return sqrtf(sqrDist);
+}
+
 
 // called by the world update start event
 void ArmPlugin::OnUpdate(const common::UpdateInfo& updateInfo)
@@ -979,8 +1060,8 @@ void ArmPlugin::OnUpdate(const common::UpdateInfo& updateInfo)
 		LearningRate += 0.05;
 		createAgent();
 		std::cout << colorTable[BoldBlue] << "*** Restarting with learning rate " <<  LearningRate << " maxLearningRate = " << maxLearningRate << " accuracy = " << (float(successfulGrabs)/float(totalRuns)) << " LSTM Size = " << LSTMSize << colorTable[Reset_] << std::endl;
-		std::clog << std::endl << std::endl << std::flush;
-		std::clog << "SuccessfulGrabs TotalRuns Accuracy LearningRate maxLearningRate LSTMSize " << LearningRate << std::endl << std::flush;
+		std::clog << std::endl << std::endl << std::flush;	// spacer
+		std::clog << "SuccessfulGrabs TotalRuns Accuracy LearningRate maxLearningRate LSTMSize Last100Accuracy" << std::endl << std::flush;
 		totalRuns = 0;
 		successfulGrabs = 0;
 		return;
@@ -995,6 +1076,7 @@ void ArmPlugin::OnUpdate(const common::UpdateInfo& updateInfo)
 	const bool hadNewState = newState && !testAnimation;
 	float distGround = 0.0;
 	float distGoal = 0.0;
+	float distGoalPlane = 0.0;
 
 	// update the robot positions with vision/DQN
 	if( updateJoints() )
@@ -1046,17 +1128,16 @@ void ArmPlugin::OnUpdate(const common::UpdateInfo& updateInfo)
 		// get the bounding box for the gripper		
 		const math::Box& gripBBox = gripper->GetBoundingBox();
 		const float groundContact = -0.5f;
-		distGround = sqrtf((gripBBox.min.z) * (gripBBox.min.z));
+		distGround = BoxZDistance(gripBBox, propBBox);
 		
 		distGoal = BoxDistance(gripBBox, propBBox); // compute the reward from distance to the goal
+		distGoalPlane = BoxXYDistance(gripBBox, propBBox); // XY plane distance for overhead camera
 		/*
 		/ DONE - set appropriate Reward for robot hitting the ground.
 		/
 		*/
 			
-		const bool checkGroundContact = (gripBBox.min.z <= groundContact || gripBBox.max.z <= groundContact);
-
-		if(checkGroundContact)
+		if(distGround <= groundContact)
 		{				
 			rewardHistory = REWARD_LOSS;
 			newReward     = true;
@@ -1073,7 +1154,7 @@ void ArmPlugin::OnUpdate(const common::UpdateInfo& updateInfo)
 		
 			if(DEBUG2){printf("distance(('%s', '%s'), 'ground') = %f %f\n", gripper->GetName().c_str(), prop->model->GetName().c_str(), distGoal, distGround);}
 
-			if( episodeFrames > 1 )
+			if( episodeFrames > 1 && !endEpisode)
 			{
 				const float distDelta  = lastGoalDistance - distGoal;
 				const float alpha = 0.1;	// 10% current dist, 90% historical average
@@ -1083,9 +1164,18 @@ void ArmPlugin::OnUpdate(const common::UpdateInfo& updateInfo)
 				// tanh returns values from -1.0 to 1.0, which is then adjusted by the reward amount
 				rewardHistory = tanh(avgGoalDelta)*REWARD_WIN*REWARD_MULTIPLIER;
 				newReward     = true;	
+
+				const float distDeltaPlane  = lastGoalPlaneDistance - distGoalPlane;
+
+				// compute the smoothed moving average of the delta of the distance to the goal
+				avgGoalPlaneDelta  = (distDeltaPlane * alpha) + (avgGoalPlaneDelta * (1 - alpha));
+				// tanh returns values from -1.0 to 1.0, which is then adjusted by the reward amount
+				rewardHistory3 = tanh(avgGoalPlaneDelta)*REWARD_WIN*REWARD_MULTIPLIER;
+				newReward     = true;	
 			}
 
 			lastGoalDistance = distGoal;
+			lastGoalPlaneDistance = distGoalPlane;
 		}
 	}
 
@@ -1099,8 +1189,8 @@ void ArmPlugin::OnUpdate(const common::UpdateInfo& updateInfo)
 
 		// send reward to DQN
 		if (agent)  agent->NextReward(rewardHistory, endEpisode);
-		if (agent2) agent2->NextReward(rewardHistory, endEpisode);
-		if (agent3) agent3->NextReward(rewardHistory, endEpisode);
+		if (agent2) agent2->NextReward(rewardHistory2, endEpisode);
+		if (agent3) agent3->NextReward(rewardHistory3, endEpisode);
 
 		// reset reward indicator
 		newReward = false;
@@ -1114,6 +1204,8 @@ void ArmPlugin::OnUpdate(const common::UpdateInfo& updateInfo)
 			episodeFrames    = 0;
 			lastGoalDistance = 0.0f;
 			avgGoalDelta     = 0.0f;
+			lastGoalPlaneDistance = 0.0f;
+			avgGoalPlaneDelta     = 0.0f;
 
 			// track the number of wins and agent accuracy
 			if( rewardHistory >= REWARD_WIN ) {
@@ -1127,11 +1219,6 @@ void ArmPlugin::OnUpdate(const common::UpdateInfo& updateInfo)
 
 			totalRuns++;
 			printf("Current Accuracy: %0.2f (%03u of %03u)  (reward=%.2f %s) ", float(successfulGrabs)/float(totalRuns), successfulGrabs, totalRuns, rewardHistory, (rewardHistory >= REWARD_WIN ? "\033[0;32mWIN\033[0m" : "\033[0;31mLOSS\033[0m"));
-			std::clog <<  
-				successfulGrabs << " " << totalRuns << " " << 
-				(float(successfulGrabs)/float(totalRuns)) << " " <<
-				LearningRate << " " << maxLearningRate << " " << LSTMSize <<
-				std::endl << std::flush;
 
 			if( totalRuns >= RUN_HISTORY )
 			{
@@ -1150,12 +1237,23 @@ void ArmPlugin::OnUpdate(const common::UpdateInfo& updateInfo)
 
 			printf("\n");
 
+			std::clog <<  
+				successfulGrabs << " " << totalRuns << " " << 
+				(float(successfulGrabs)/float(totalRuns)) << " " <<
+				LearningRate << " " << maxLearningRate << " " << 
+				LSTMSize << " " << (float(historyWins)/float(RUN_HISTORY)) <<
+				std::endl << std::flush;
+
 			for( uint32_t n=0; n < DOF; n++ )
 				vel[n] = 0.0f;
 		}
-		if (episodeFrames > 1) {
-			// xterm title bar
-			printf("%sAcu: %0.2f (%03u of %03u),Rew=%.2f Delta=%.2f%s", xtermTitle, float(successfulGrabs)/float(totalRuns), successfulGrabs, totalRuns, rewardHistory, avgGoalDelta, xtermEndTitle);
+		if (episodeFrames > 1) {	// xterm title bar
+			printf("%sAcu: %0.2f %03u/%03u,Rew=%.2f Delta=%.2f %03u/%03u%s", xtermTitle, float(successfulGrabs)/float(totalRuns), successfulGrabs, totalRuns, rewardHistory, avgGoalDelta, historyWins, RUN_HISTORY, xtermEndTitle);
+		}
+		if (totalRuns > 0 && (totalRuns%100) == 0) {	// save a checkpoint every 100 runs
+			if (agent) agent->SaveCheckpoint(checkpointfile);
+			if (agent2) agent2->SaveCheckpoint(checkpointfile2);
+			if (agent3) agent3->SaveCheckpoint(checkpointfile3);
 		}
 	}
 }
