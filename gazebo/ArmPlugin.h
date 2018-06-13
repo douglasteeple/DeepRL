@@ -32,11 +32,6 @@
 #include <syslog.h>
 #include <time.h>
 
-#define WANTCAMERA1 1		// original
-#define WANTCAMERA2 1		// overhead
-#define WANTCAMERA3 0		// angled
-#define MULTIPLOT_RUNS 0
-
 namespace gazebo
 {
 
@@ -78,6 +73,8 @@ private:
 	bool     newReward;			// true if a new reward's been issued
 	bool     endEpisode;		// true if this episode is over
 	float    rewardHistory;		// value of the last reward issued
+	float    rewardHistory2;	// value of the last reward issued
+	float    rewardHistory3;	// value of the last reward issued
 	Tensor*  inputState;		// pyTorch input object to the agent
 	Tensor*  inputState2;		// pyTorch input object to the agent
 	Tensor*  inputState3;		// pyTorch input object to the agent
@@ -98,6 +95,8 @@ private:
 	float    resetPos[DOF];
 	float    lastGoalDistance;
 	float    avgGoalDelta;
+	float    lastGoalPlaneDistance;
+	float    avgGoalPlaneDelta;
 	int	     successfulGrabs;
 	int	     totalRuns;
 	int      runHistoryIdx;
