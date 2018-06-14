@@ -317,8 +317,13 @@ I finally realized that one camera as given could never operate the base joint s
 
 I also set the learning rate very small: 0.0001, because the complex task requires longer learning times, and it tended to get stuck doing the hill climbing with smaller learning rates.
 
-At one point the last 100 accurcay rate hit 94%!
+At one point the last 100 accuracy rate hit 94%!
 
 ![alt text](images/TwoCamera-0.0001-plot94.png "Two cameras 94% accurcay last 100 episodes Chalenge 3")
+
+
+With a colored arm the last 100 accurcay rate hit 98%!
+
+![alt text](images/color98.png "Two cameras 98% accurcay last 100 episodes Chalenge 3")
 
 
