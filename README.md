@@ -313,7 +313,12 @@ Having the cylinder move from run to run causes issues for the learning accuracy
 
 I finally realized that one camera as given could never operate the base joint since it can't see from above. So I added another camera and combined the results:
 
-![alt text](images/Challenge3TwoCameras.png "Two cameras")
+![alt text](images/Challenge3TwoCameras.png "Two cameras 85% accuracy Challenge 3")
 
 I also set the learning rate very small: 0.0001, because the complex task requires longer learning times, and it tended to get stuck doing the hill climbing with smaller learning rates.
+
+At one point the last 100 accurcay rate hit 94%!
+
+![alt text](images/TwoCamera-0.0001-plot94.png "Two cameras 94% accurcay last 100 episodes Chalenge 3")
+
 
