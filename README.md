@@ -327,3 +327,7 @@ With a colored arm the last 100 accurcay rate hit 98%!
 ![alt text](images/color98.png "Two cameras 98% accurcay last 100 episodes Chalenge 3")
 
 
+Now, let's try something a little different. Two competing arms. Will they learn faster? Will they learn to cooperate?
+
+![alt text](images/ArmsRace2.png "Two arms Two cameras Chalenge 3++")
+
