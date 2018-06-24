@@ -6,7 +6,7 @@ This project is based on the Nvidia open source project "jetson-reinforcement" d
 1. Have any part of the robot arm touch the object of interest, with at least a 90% accuracy.
 2. Have only the gripper base of the robot arm touch the object, with at least a 80% accuracy.
 
-<table width="100%" align="center">
+<table width="100%" style="float:center">
 	<tr><td><img width=480 src="images/90Success.png" alt="Objective One - 90% arm contact"/></td></tr>
 </table>
 
