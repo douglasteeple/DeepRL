@@ -327,7 +327,13 @@ With a colored arm the last 100 accurcay rate hit 98%!
 ![alt text](images/color98.png "Two cameras 98% accurcay last 100 episodes Chalenge 3")
 
 
-Now, let's try something a little different. Two competing arms. Will they learn faster? Will they learn to cooperate?
+Now, let's try something a little different. Two competing arms. Will they learn faster? Will they learn to cooperate? The cameras see both arms and both arms see the same image with 2 arms. The agents associated with each arm are independent. if one arm hits the tube it knocks it away or touches it and resets the position, thus the other fails... There is one image that both sets (I say sets of agents because there is one for the upper camera and one for the side-on camera) of agents see, so each can also see the other arm, but can't control it directly. The agent set must learn which arm it can control, and beat the other agent set to hit the tube. ...or perhaps cooperate by tossing the tube to the other arm...
 
 ![alt text](images/ArmsRace2.png "Two arms Two cameras Chalenge 3++")
+
+But I'm having trouble with a bias in results:
+
+![alt text](images/22.png "Two arms Two cameras Chalenge 3++")
+
+
 
