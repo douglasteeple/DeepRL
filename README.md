@@ -331,6 +331,10 @@ Now, let's try something a little different. Two competing arms. Will they learn
 
 ![alt text](images/ArmsRace2.png "Two arms Two cameras Chalenge 3++")
 
+Some fun results, Let's Have a Party:
+
+![alt text](images/LetsHaveAParty.gif "Let's Have a Party")
+
 But I'm having trouble with a bias in results:
 
 ![alt text](images/22.png "Two arms Two cameras Chalenge 3++")
